@@ -1,9 +1,10 @@
 import modelosInit from '../models/init-models.js'
 import {sequelize} from '../database/database.js'
 import { tokenize, detokenize} from '../utilities/tokenization.js'
+import { getExchange } from '../utilities/external.apis.js';
 import luhn from 'luhn';
 let modelos = modelosInit(sequelize)
-
+let version = "1.0.0";
 //Tokenizar -> Intarcambiar numero por token
 export const tokenizeCard = async (req,res) =>{
     let {card_holder,card_number,expiration_date,card_type} = req.body;
@@ -38,5 +39,50 @@ export const tokenizeCard = async (req,res) =>{
         res.status(500).json({"error": error});
     }
 
+    res.status(200).json(response);
+}
+
+export const payCard = async (req,res) =>{
+    let token_id = req.body.token_id;
+    let currency = req.body.currency;
+    let response;
+    let token;
+    let expiration;
+    let present = Date.now()
+    let exchange_rate = await getExchange(currency);
+    
+    try {
+        response = await modelos.tokens.findByPk(token_id);
+        token = response.dataValues.token.toString();
+        expiration = Date.parse(response.dataValues.expired_at.toString())
+
+        if(expiration < present){
+            res.status(500).json({"error": "Tu token a expirado"});
+            return;
+        }
+
+        
+        response = await modelos.orders.create({
+            amount: req.body.amount,
+            currency,
+            exchange_rate,
+            expedition_date: Date.now(),
+            geolocation:  req.body.geolocation,
+            version,
+            bank_transmitter : req.body.bank_transmitter,
+            bank_receptor: req.body.bank_receptor,
+            concept: req.body.concept,
+            charges: req.body.charges,
+            recurrency: req.body.recurrency,
+            token_id,
+            client_id: req.body.client_id,
+            paymenthm_id: req.body.paymenthm_id,
+            status_id: 3
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({"error": error});
+    }
+    
     res.status(200).json(response);
 }
