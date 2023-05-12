@@ -8,3 +8,4 @@ export const getExchange = async (currency) => {
         console.error(error);
     }
 }
+

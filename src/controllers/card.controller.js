@@ -2,7 +2,10 @@ import modelosInit from '../models/init-models.js'
 import {sequelize} from '../database/database.js'
 import { tokenize, detokenize} from '../utilities/tokenization.js'
 import { getExchange } from '../utilities/external.apis.js';
+import { Op } from 'sequelize';
+import cron from "node-cron"
 import luhn from 'luhn';
+import rn from 'random-number'
 let modelos = modelosInit(sequelize)
 let version = "1.0.0";
 //Tokenizar -> Intarcambiar numero por token
@@ -86,3 +89,43 @@ export const payCard = async (req,res) =>{
     
     res.status(200).json(response);
 }
+
+const getRandom = (max) => {
+    return Math.floor(Math.random() * max) +1;
+}
+
+cron.schedule('*/1 * * * *', async () => {
+    let response;
+    
+    try {
+        response = await modelos.orders.findAll({
+            where:{
+                [Op.and]:[
+                    {status_id:3},
+                    {[Op.or]:[{tries:null},{tries:false}]}
+                ]
+            }});
+    } catch (error) {
+        console.log(error)
+    }
+    response.forEach((data) => {
+        var options = {
+            min:  1,
+            max:  2,
+            integer: true
+        }
+        let pago = rn(options)
+        if(data.tries=== null && pago !== 1){
+            data.tries = false;
+            data.save();
+        }else if(data.tries === false && pago !== 1){
+            data.tries = true;
+            data.status_id = 2;
+            data.save();
+        }else if(pago === 1){
+            data.tries = true;
+            data.status_id= pago;
+            data.save();
+        }
+    });
+});
